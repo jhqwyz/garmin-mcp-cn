@@ -16,7 +16,14 @@ build/
 .DS_Store
 .claude.md
 .mcp.json
-docs/*
-.gitignore
 playground/*
 tests/fixtures/captured/*
+
+# Local executables and authentication material
+.bin/
+.env.*
+garmin_tokens.json
+oauth1_token.json
+oauth2_token.json
+*.key
+*tunnel*.local.*

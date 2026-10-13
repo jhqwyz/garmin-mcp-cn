@@ -1,575 +1,122 @@
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/taxuspt-garmin-mcp-badge.png)](https://mseep.ai/app/taxuspt-garmin-mcp)
+# Garmin MCP China — ChatGPT 网页端与桌面端
 
-# Garmin MCP Server (China / 中国区支持)
+本项目基于 [BorisBW/garmin-mcp-cn](https://github.com/BorisBW/garmin-mcp-cn)，原始上游为 [Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp)。保留 MIT 许可证。
 
-> **This is a fork of [Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp) with Garmin China (`garmin.cn`) support.**
->
-> The original MCP server hardcodes `is_cn=False`, which means it only works with the global Garmin Connect (`connect.garmin.com`). This fork adds a `GARMIN_IS_CN` environment variable so users on Garmin China can connect to `connect.garmin.cn` instead.
+此版本面向个人健康与运动数据分析，默认只开放 79 个经过审阅的读取工具。写入、删除、上传、安排训练和重新加载数据的工具不对 MCP 客户端开放。
 
-## 🇨🇳 中国区用户
+## 本次更新
 
-如果你的 Garmin 账号注册在佳明中国（`garmin.cn`），只需要设置一个环境变量：
+- 升级到 `garminconnect==0.3.17`，使用其原生认证，完全移除 Garth。
+- 首次登录和凭证复用都明确选择中国区；默认中国区凭证目录是 `~/.garminconnect-cn`。
+- 登录凭证采用 `garmin_tokens.json`。旧 `oauth1_token.json` / `oauth2_token.json` 无法转换，需要重新登录。
+- 使用 MCP SDK 1.x 的 Streamable HTTP 支持；保留 STDIO。HTTP 仅绑定本机回环地址。
+- 支持 OpenAI 官方 Secure MCP Tunnel，让 ChatGPT 网页端调用本机服务。
+- 修正压力汇总丢弃有效 0 值的问题；睡眠阶段缺失时保留其余有效指标。
+- 更新 Garmin Coach 训练详情查询，消除对旧 `garmin.garth` 接口的调用。
 
-```bash
-export GARMIN_IS_CN=true
-```
+## ChatGPT 网页端推荐路径
 
-### 认证（首次使用）
+ChatGPT → OpenAI Secure MCP Tunnel → 本机 tunnel-client → 本机 Garmin MCP → 佳明中国。
 
-```bash
-GARMIN_IS_CN=true uvx --python 3.12 --from git+https://github.com/BorisBW/garmin-mcp-cn garmin-mcp-auth
-```
+需要三个独立条件：
 
-### Claude Desktop 配置
+1. 佳明中国账号在本机完成一次认证；可能需要输入验证码。
+2. OpenAI Platform 中创建关联当前 ChatGPT 工作区的 MCP Tunnel，并有运行它的 API key。运行密钥需要 Tunnels Read + Use 权限；管理隧道需要 Read + Manage。
+3. ChatGPT 当前账号允许添加自定义 MCP 服务。在 Plugins 页面选择 Add custom MCP server，Connection 选择 Tunnel，并安装产生的私有插件。
 
-```json
-{
-  "mcpServers": {
-    "garmin": {
-      "command": "uvx",
-      "args": [
-        "--python", "3.12",
-        "--from", "git+https://github.com/BorisBW/garmin-mcp-cn",
-        "garmin-mcp"
-      ],
-      "env": {
-        "GARMIN_IS_CN": "true"
-      }
-    }
-  }
-}
-```
+参考：[OpenAI Secure MCP Tunnel 官方说明](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)、[ChatGPT 自定义 MCP 接入说明](https://developers.openai.com/plugins/deploy/connect-chatgpt)。
 
-### Claude Code 配置
+运行服务的电脑需要保持开机联网，隧道进程需要持续运行。本项目不会自动导入全部历史数据，也不包含定时报告。
 
-在 `~/.claude/settings.json` 中添加：
+### Mac 安装
 
-```json
-{
-  "mcpServers": {
-    "garmin": {
-      "command": "uvx",
-      "args": [
-        "--python", "3.12",
-        "--from", "git+https://github.com/BorisBW/garmin-mcp-cn",
-        "garmin-mcp"
-      ],
-      "env": {
-        "GARMIN_IS_CN": "true"
-      }
-    }
-  }
-}
-```
-
-> 全球区用户：不设置 `GARMIN_IS_CN` 或设为 `false`，行为与原版完全一致。
-
----
-
-This Model Context Protocol (MCP) server connects to Garmin Connect and exposes your fitness and health data to Claude and other MCP-compatible clients.
-
-Garmin's API is accessed via the awesome [python-garminconnect](https://github.com/cyberjunky/python-garminconnect) library.
-
-## Features
-
-- List recent activities with pagination support
-- Get detailed activity information
-- Access health metrics (steps, heart rate, sleep, stress, respiration)
-- View body composition data
-- Track training status and readiness
-- Manage gear and equipment
-- Access workouts and training plans
-- Weekly health aggregates (steps, stress, intensity minutes)
-
-### Tool Coverage
-
-This MCP server implements **95+ tools** covering ~88% of the [python-garminconnect](https://github.com/cyberjunky/python-garminconnect) library (v0.2.38):
-
-- ✅ Activity Management (14 tools)
-- ✅ Health & Wellness (30 tools) - includes custom lightweight summary tools
-- ✅ Training & Performance (9 tools)
-- ✅ Workouts (8 tools)
-- ✅ Devices (7 tools)
-- ✅ Gear Management (5 tools)
-- ✅ Weight Tracking (5 tools)
-- ✅ Challenges & Badges (10 tools)
-- ✅ Women's Health (3 tools)
-- ✅ User Profile (3 tools)
-
-### Intentionally Skipped Endpoints
-
-Some endpoints are not implemented due to performance or complexity considerations:
-
-**High Data Volume:**
-- `get_activity_details()` - Returns large GPS tracks and chart data (50KB-500KB). Use `get_activity()` for summaries instead.
-
-**Specialized Workout Formats:**
-- `upload_running_workout()`, `upload_cycling_workout()`, `upload_swimming_workout()` - Sport-specific workout uploads. Use `upload_workout()` for general workouts.
-
-**Maintenance & Destructive Operations:**
-- `delete_activity()`, `delete_blood_pressure()` - Destructive operations require careful consideration.
-- Internal/Auth methods: `login()`, `resume_login()`, `connectapi()`, `download()` - Handled automatically by the library.
-
-If you need any of these endpoints, please [open an issue](https://github.com/Taxuspt/garmin_mcp/issues).
-
-## Setup
-
-### Quick Start for Claude Desktop
-
-The easiest way to use this MCP server with Claude Desktop is to authenticate once before adding the server to your configuration.
-
-#### Prerequisites
-
-- Python 3.12+
-- Garmin Connect account
-- MFA may be required if enabled on your account
-
-#### Step 1: Pre-authenticate (One-time)
-
-Before adding to Claude Desktop, authenticate once in your terminal:
+需要 Git；安装脚本会在缺少 uv 时从其官方来源安装 uv，并由 uv 准备 Python 3.12。
 
 ```bash
-
-# Install and run authentication tool
-uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
-
-# You'll be prompted for:
-# - Email (or set GARMIN_EMAIL env var)
-# - Password (or set GARMIN_PASSWORD env var)
-# - MFA code (if enabled on your account)
-
-# OAuth tokens will be saved to ~/.garminconnect
+git clone https://github.com/jhqwyz/garmin-mcp-cn.git
+cd garmin-mcp-cn
+bash install_mac.command
 ```
 
-You can verify your credentials at any time with
-```bash
-uv run garmin-mcp-auth --verify
-```
+安装程序会：安装锁定的依赖 → 下载并校验 OpenAI 官方 tunnel-client → 在终端完成佳明中国认证 → 接收 Tunnel ID → 隐藏输入 OpenAI 运行密钥 → 检查并运行隧道。
 
-**Note:** You can also set credentials via environment variables:
-```bash
-GARMIN_EMAIL=your@email.com GARMIN_PASSWORD=secret garmin-mcp-auth
-```
+佳明密码和验证码不保存到项目配置，不发给 ChatGPT。OpenAI 运行密钥只通过子进程环境传递，不写入启动参数、项目文件或隧道配置。需要分析的佳明查询结果会经隧道发送到 OpenAI。
 
-If you don't have MFA enabled you can also skip `garmin-mcp-auth` and pass `GARMIN_EMAIL` and `GARMIN_PASSWORD` as env variables directly to Claude Desktop (or other MCP client, if supported), see below for an example.
+创建隧道与运行密钥：
 
-#### Step 2: Configure Claude Desktop
+- [Platform 隧道管理](https://platform.openai.com/settings/organization/tunnels)
+- [Platform 运行 API key](https://platform.openai.com/settings/organization/api-keys)
 
-Add to your Claude Desktop MCP settings **WITHOUT** credentials:
+隧道创建后，确保它关联当前 ChatGPT 工作区。保持安装终端运行，在 [ChatGPT Plugins](https://chatgpt.com/plugins) 中添加自定义 MCP，选择 Tunnel，填入同一个 Tunnel ID，然后创建并安装插件。
 
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "garmin": {
-      "command": "uvx",
-      "args": [
-        "--python",
-        "3.12",
-        "--from",
-        "git+https://github.com/Taxuspt/garmin_mcp",
-        "garmin-mcp"
-      ]
-    }
-  }
-}
-```
-
-**Important:** No `GARMIN_EMAIL` or `GARMIN_PASSWORD` needed in config! The server uses your saved tokens.
-
-#### Step 3: Restart Claude Desktop
-
-Your Garmin data is now available in Claude!
-
----
-
-### Development Setup
-
-1. Install the required packages on a new environment:
+之后重新启动已配置的隧道：
 
 ```bash
-uv sync
+bash start_web.command
 ```
 
-## Running the Server
+每次启动时可在终端隐藏输入运行密钥。密钥不会持久保存。
 
-### Configuration
-
-Your Garmin Connect credentials are read from environment variables:
-
-- `GARMIN_EMAIL`: Your Garmin Connect email address
-- `GARMIN_EMAIL_FILE`: Path to a file containing your Garmin Connect email address
-- `GARMIN_PASSWORD`: Your Garmin Connect password
-- `GARMIN_PASSWORD_FILE`: Path to a file containing your Garmin Connect password
-
-File-based secrets are useful in certain environments, such as inside a Docker container. Note that you cannot set both `GARMIN_EMAIL` and `GARMIN_EMAIL_FILE`, similarly you cannot set both `GARMIN_PASSWORD` and `GARMIN_PASSWORD_FILE`.
-
-### Testing the server locally with MCP Inspector
-
-The Inspector runs directly through npx without requiring installation. Run from the project root:
+### 分步安装 / Linux
 
 ```bash
-npx @modelcontextprotocol/inspector uv run garmin-mcp
+uv sync --locked --no-dev
+uv run --no-dev python scripts/install_tunnel_client.py
+uv run --no-dev garmin-mcp-auth --china
+uv run --no-dev garmin-mcp-web setup --china --tunnel-id YOUR_TUNNEL_ID --tunnel-client "$PWD/.bin/tunnel-client"
 ```
 
-You'll be able to inspect and test the tools.
-
-### With Claude Desktop
-
-1. Create a configuration in Claude Desktop:
-
-Edit your Claude Desktop configuration file:
-
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-You have two options to run the MCP locally with Claude.
-
-#### Directly from github without cloning the repo:
-
-1. Add this server configuration:
-
-```json
-{
-  "mcpServers": {
-    "garmin": {
-      "command": "uvx",
-      "args": [
-        "--python",
-        "3.12",
-        "--from",
-        "git+https://github.com/Taxuspt/garmin_mcp",
-        "garmin-mcp"
-      ],
-      "env": {
-        "GARMIN_EMAIL": "YOUR_GARMIN_EMAIL",
-        "GARMIN_PASSWORD": "YOUR_GARMIN_PASSWORD"
-      }
-    }
-  }
-}
-```
-
-You might have to add the full path to `uvx` you can check the full path with `which uvx`
-
-2. Restart Claude Desktop
-
-#### Directly from your local copy of the repository:
-
-1. Add this server configuration:
-
-```
-{
-  "mcpServers": {
-    "garmin-local": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "<full path to your local repository>/garmin_mcp",
-        "run",
-        "garmin-mcp"
-      ]
-    }
-  }
-}
-```
-
-2. Restart Claude Desktop
-
-### With Docker
-
-Docker provides an isolated and consistent environment for running the MCP server.
-
-#### Quick Start with Docker Compose (Recommended)
-
-1. Create a `.env` file with your credentials:
+单独检查已配置的隧道：
 
 ```bash
-echo "GARMIN_EMAIL=your_email@example.com" > .env
-echo "GARMIN_PASSWORD=your_password" >> .env
+uv run --no-dev garmin-mcp-web doctor --china --tunnel-client "$PWD/.bin/tunnel-client"
 ```
 
-2. Start the container:
+官方安装器按当前操作系统与架构选择 `openai/tunnel-client` 的最新正式发行，校验 GitHub 提供的 SHA-256 后，只解压该二进制文件。
+
+## 本地 MCP 客户端
+
+先认证，再把以下命令配置为 STDIO 服务：
 
 ```bash
-docker compose up -d
+uv run --locked --no-dev garmin-mcp-auth --china
+uv run --locked --no-dev garmin-mcp --china
 ```
 
-3. View logs to monitor the server:
+本地 Streamable HTTP 测试：
 
 ```bash
-docker compose logs -f garmin-mcp
+uv run --locked --no-dev garmin-mcp --china --transport streamable-http --port 8000
 ```
 
-#### Using Docker Directly
+地址是 `http://127.0.0.1:8000/mcp`。该地址仅在本机可访问。ChatGPT 网页端使用隧道连接，不直接连接 localhost。
+
+## 认证与凭证
+
+- 全球区：`garmin-mcp-auth --global` 和 `garmin-mcp --global`；全球区默认凭证目录为 `~/.garminconnect`。
+- 自定义凭证目录：使用 `--token-path` 或 `GARMINTOKENS`。
+- 验证现有凭证：`garmin-mcp-auth --china --verify`。
+- 重新认证：`garmin-mcp-auth --china --force-reauth`。新认证失败时保留原凭证。
+- 新版上游会自动刷新令牌。只有刷新凭证到期或被撤销等情况才需要重新登录。
+- 不要把凭证文件提交到 Git。凭证文件权限由上游限定为仅当前用户可读写。
+
+兼容 `GARMIN_EMAIL` / `GARMIN_PASSWORD` 及对应 `_FILE` 输入，但日常使用建议在终端完成交互认证，服务端仅复用凭证。
+
+## 数据与分析边界
+
+可读取活动、睡眠、心率、HRV、压力、身体电量、体重、训练状态等已有记录。哪些指标可用取决于设备与账号。
+
+缺失数据和请求失败均表示不可用，不能作为零值。分析睡眠时间时优先使用 GMT 字段，再转换到 Asia/Shanghai，避免部分中国区账号本地时间字段重复偏移的问题。
+
+## 验证
+
+默认验证不需要真实账号，也不修改佳明数据：
 
 ```bash
-# Build the image
-docker build -t garmin-mcp .
-
-# Run the container
-docker run -it \
-  -e GARMIN_EMAIL="your_email@example.com" \
-  -e GARMIN_PASSWORD="your_password" \
-  -v garmin-tokens:/root/.garminconnect \
-  garmin-mcp
+uv sync --locked
+uv run --locked pytest tests/unit tests/integration -q
 ```
 
-#### Using File-Based Secrets (More Secure)
+测试覆盖中国区凭证复用、重新认证失败时保留原凭证、只读工具实际拒绝写入、压力 0 值统计、STDIO / Streamable HTTP 协议以及隧道密钥处理。
 
-For enhanced security, especially in production environments, use file-based secrets instead of environment variables:
-
-1. Create a secrets directory and add your credentials:
-
-```bash
-mkdir -p secrets
-echo "your_email@example.com" > secrets/garmin_email.txt
-echo "your_password" > secrets/garmin_password.txt
-chmod 600 secrets/*.txt
-```
-
-2. Edit [docker-compose.yml](docker-compose.yml) and uncomment the secrets section:
-
-```yaml
-services:
-  garmin-mcp:
-    environment:
-      - GARMIN_EMAIL_FILE=/run/secrets/garmin_email
-      - GARMIN_PASSWORD_FILE=/run/secrets/garmin_password
-    secrets:
-      - garmin_email
-      - garmin_password
-
-secrets:
-  garmin_email:
-    file: ./secrets/garmin_email.txt
-  garmin_password:
-    file: ./secrets/garmin_password.txt
-```
-
-3. Start the container:
-
-```bash
-docker compose up -d
-```
-
-#### Handling MFA with Docker
-
-If you have multi-factor authentication (MFA) enabled on your Garmin account:
-
-1. Run the container in interactive mode:
-
-```bash
-docker compose run --rm garmin-mcp
-```
-
-2. When prompted, enter your MFA code:
-
-```
-Garmin Connect MFA required. Please check your email/phone for the code.
-Enter MFA code: 123456
-```
-
-3. The OAuth tokens will be saved to the Docker volume (`garmin-tokens`), so you won't need to re-authenticate on subsequent runs.
-
-4. After MFA setup, you can run the container normally:
-
-```bash
-docker compose up -d
-```
-
-#### Docker Volume Management
-
-The OAuth tokens are stored in a persistent Docker volume to avoid re-authentication:
-
-```bash
-# List volumes
-docker volume ls
-
-# Inspect the tokens volume
-docker volume inspect garmin_mcp_garmin-tokens
-
-# Remove the volume (will require re-authentication)
-docker volume rm garmin_mcp_garmin-tokens
-```
-
-#### Using with Claude Desktop via Docker
-
-To use the Dockerized MCP server with Claude Desktop, you can configure it to communicate with the container. However, note that MCP servers typically communicate via stdio, which works best with direct process execution. For Docker-based deployments, consider using the standard `uvx` method shown in the [With Claude Desktop](#with-claude-desktop) section instead.
-
-
-## Usage Examples
-
-Once connected in Claude, you can ask questions like:
-
-- "Show me my recent activities"
-- "What was my sleep like last night?"
-- "How many steps did I take yesterday?"
-- "Show me the details of my latest run"
-
-## Troubleshooting
-
-### "Failed to spawn process: No such file or directory"
-
-If Claude Desktop can't find `uvx`, it's because `uvx` is not in the PATH that Claude Desktop uses. To fix this:
-
-1. Find where `uvx` is installed:
-```bash
-which uvx
-```
-
-2. Use the full path in your configuration. For example, if `uvx` is at `/Users/username/.cargo/bin/uvx`:
-```json
-{
-  "mcpServers": {
-    "garmin": {
-      "command": "/Users/username/.cargo/bin/uvx",
-      "args": [
-        "--python",
-        "3.12",
-        "--from",
-        "git+https://github.com/Taxuspt/garmin_mcp",
-        "garmin-mcp"
-      ]
-    }
-  }
-}
-```
-
-### Login Issues
-
-If you encounter login issues:
-
-1. Verify your credentials are correct
-2. Check if Garmin Connect requires additional verification
-3. Ensure the garminconnect package is up to date
-
-### Logs
-
-For other issues, check the Claude Desktop logs at:
-
-- macOS: `~/Library/Logs/Claude/mcp-server-garmin.log`
-- Windows: `%APPDATA%\Claude\logs\mcp-server-garmin.log`
-
-### Garmin Connect Multi-Factor Authentication (MFA)
-
-#### Understanding MFA with MCP Servers
-
-MCP servers run as background processes without direct terminal access. If your Garmin account has MFA enabled, you must authenticate once using the pre-authentication tool before the server can run.
-
-#### Recommended: Pre-Authentication Tool
-
-The easiest way to handle MFA is using the dedicated authentication tool:
-
-```bash
-garmin-mcp-auth
-```
-
-This saves OAuth tokens to `~/.garminconnect` for future use. The server will automatically use these tokens when running in Claude Desktop or other MCP clients.
-
-**Additional Options:**
-
-```bash
-# Use environment variables for credentials
-GARMIN_EMAIL=you@example.com GARMIN_PASSWORD=secret garmin-mcp-auth
-
-# Verify existing tokens
-garmin-mcp-auth --verify
-
-# Force re-authentication (e.g., when tokens expire)
-garmin-mcp-auth --force-reauth
-
-# Use custom token location
-garmin-mcp-auth --token-path ~/.garmin_tokens
-```
-
-#### Alternative: Manual First Run
-
-You can also authenticate by running the server once interactively:
-
-```bash
-# Store credentials in files for security
-echo "your_email@example.com" > ~/.garmin_email
-echo "your_password" > ~/.garmin_password
-chmod 600 ~/.garmin_email ~/.garmin_password
-
-# Run server interactively to authenticate
-GARMIN_EMAIL_FILE=~/.garmin_email GARMIN_PASSWORD_FILE=~/.garmin_password \
-  uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp
-
-# Enter MFA code when prompted
-# Tokens will be saved automatically
-# Now add to Claude Desktop config without credentials
-```
-
-After initial authentication, configure Claude Desktop **without** credentials (tokens are already saved):
-
-```json
-{
-  "mcpServers": {
-    "garmin": {
-      "command": "uvx",
-      "args": [
-        "--python",
-        "3.12",
-        "--from",
-        "git+https://github.com/Taxuspt/garmin_mcp",
-        "garmin-mcp"
-      ]
-    }
-  }
-}
-```
-
-#### Using Docker with MFA
-
-If using Docker, follow the [Handling MFA with Docker](#handling-mfa-with-docker) section above for a streamlined experience with persistent token storage.
-
-#### Troubleshooting MFA
-
-**Error: "MFA authentication required but no interactive terminal available"**
-
-Solution:
-1. Open terminal
-2. Run: `garmin-mcp-auth`
-3. Enter credentials and MFA code
-4. Restart Claude Desktop
-
-**Token Expired**
-
-OAuth tokens expire periodically (approximately every 6 months). Re-authenticate:
-```bash
-garmin-mcp-auth --force-reauth
-```
-
-**Verify Tokens Work**
-```bash
-garmin-mcp-auth --verify
-```
-
-## Testing
-
-This project includes comprehensive tests for all 81 MCP tools. **All 96 tests are currently passing (100%)**.
-
-### Running Tests
-
-```bash
-# Run all integration tests (default - uses mocked Garmin API)
-uv run pytest tests/integration/
-
-# Run tests with verbose output
-uv run pytest tests/integration/ -v
-
-# Run a specific test module
-uv run pytest tests/integration/test_health_wellness_tools.py -v
-
-# Run end-to-end tests (requires real Garmin credentials)
-uv run pytest tests/e2e/ -m e2e -v
-```
-
-### Test Structure
-
-- **Integration tests** (96 tests): Test all MCP tools using FastMCP integration with mocked Garmin API responses
-- **End-to-end tests** (4 tests): Test with real MCP server and Garmin API (requires valid credentials)
+真实账号验证需要用户在本机完成：首次认证、读取睡眠、重启服务复用凭证、后续自动刷新。不将模拟测试描述为真实账号连通性验证。

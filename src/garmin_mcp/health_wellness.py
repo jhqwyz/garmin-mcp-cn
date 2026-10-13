@@ -463,7 +463,7 @@ def register_tools(app):
                 return f"No sleep summary found for {date}"
 
             # Extract only essential summary metrics
-            summary = {}
+            summary = {"date": date}
 
             # Extract data from dailySleepDTO if available
             daily_sleep = sleep_data.get('dailySleepDTO', {})
@@ -505,9 +505,10 @@ def register_tools(app):
             # Calculate sleep phase percentages if total sleep time is available
             total_sleep = summary.get('sleep_seconds', 0)
             if total_sleep and total_sleep > 0:
-                summary['deep_sleep_percent'] = round((summary.get('deep_sleep_seconds', 0) / total_sleep) * 100, 1)
-                summary['light_sleep_percent'] = round((summary.get('light_sleep_seconds', 0) / total_sleep) * 100, 1)
-                summary['rem_sleep_percent'] = round((summary.get('rem_sleep_seconds', 0) / total_sleep) * 100, 1)
+                for stage in ('deep', 'light', 'rem'):
+                    seconds = summary.get(f'{stage}_sleep_seconds')
+                    if isinstance(seconds, (int, float)):
+                        summary[f'{stage}_sleep_percent'] = round(seconds / total_sleep * 100, 1)
 
             # Convert sleep duration to hours for convenience
             if total_sleep:
@@ -564,7 +565,8 @@ def register_tools(app):
             stress_values = stress_data.get('stressValuesArray', [])
             if stress_values:
                 # Filter valid stress readings (exclude -1 and -2 which are gaps/activity)
-                valid_values = [v[1] for v in stress_values if v[1] and v[1] > 0]
+                # Zero is a valid resting reading; negative values are gaps/activity.
+                valid_values = [v[1] for v in stress_values if v[1] is not None and 0 <= v[1] <= 100]
                 rest_values = [v for v in valid_values if v < 26]
                 low_values = [v for v in valid_values if 26 <= v < 51]
                 medium_values = [v for v in valid_values if 51 <= v < 76]

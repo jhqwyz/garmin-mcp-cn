@@ -1,3 +1,4 @@
+from tests.helpers import tool_text
 """
 Integration tests for workouts module MCP tools
 
@@ -60,7 +61,7 @@ async def test_get_workout_by_id_tool(app_with_workouts, mock_garmin_client):
     mock_garmin_client.get_workout_by_id.assert_called_once_with(123456)
 
     # Parse the result and verify curation includes steps
-    result_data = json_module.loads(result[0].text)
+    result_data = json_module.loads(tool_text(result))
     assert result_data["id"] == 123456
     assert result_data["name"] == "5K Tempo Run"
     assert result_data["sport"] == "running"
@@ -89,7 +90,7 @@ async def test_get_workout_by_uuid_tool(app_with_workouts, mock_garmin_client):
     """Test get_workout_by_id tool with UUID (training plan workout)"""
     import json as json_module
 
-    # Setup mock for garth.get call (fbt-adaptive endpoint)
+    # Setup mock for the native connectapi call (fbt-adaptive endpoint)
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -117,7 +118,7 @@ async def test_get_workout_by_uuid_tool(app_with_workouts, mock_garmin_client):
             }]
         }]
     }
-    mock_garmin_client.garth.get.return_value = mock_response
+    mock_garmin_client.connectapi.return_value = mock_response.json.return_value
 
     # Call tool with UUID (contains dashes)
     workout_uuid = "d7a5491b-42a5-4d2d-ba38-4e414fc03caf"
@@ -128,13 +129,12 @@ async def test_get_workout_by_uuid_tool(app_with_workouts, mock_garmin_client):
 
     # Verify fbt-adaptive endpoint was called
     assert result is not None
-    mock_garmin_client.garth.get.assert_called_once_with(
-        "connectapi",
+    mock_garmin_client.connectapi.assert_called_once_with(
         f"workout-service/fbt-adaptive/{workout_uuid}"
     )
 
     # Parse the result and verify training plan workout fields
-    result_data = json_module.loads(result[0].text)
+    result_data = json_module.loads(tool_text(result))
     assert result_data["uuid"] == workout_uuid
     assert result_data["name"] == "Base"
     assert result_data["sport"] == "running"
@@ -227,7 +227,7 @@ async def test_get_scheduled_workouts_tool(app_with_workouts, mock_garmin_client
     )
 
     # Verify curation extracts correct fields
-    result_data = json_module.loads(result[0].text)
+    result_data = json_module.loads(tool_text(result))
     assert result_data["count"] == 1
     workout = result_data["scheduled_workouts"][0]
     assert workout["name"] == "5K Tempo Run"
@@ -297,7 +297,7 @@ async def test_get_training_plan_workouts_tool(app_with_workouts, mock_garmin_cl
     mock_garmin_client.query_garmin_graphql.assert_called_once()
 
     # Verify curation extracts correct fields
-    result_data = json_module.loads(result[0].text)
+    result_data = json_module.loads(tool_text(result))
     assert result_data["date"] == "2024-01-15"
     assert result_data["training_plans"] == ["5K Training Plan"]
     assert result_data["count"] == 2
