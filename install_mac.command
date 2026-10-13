@@ -20,7 +20,7 @@ printf '\n在 OpenAI Platform 创建关联当前 ChatGPT 工作区的 MCP Tunnel
 printf '官方说明：https://developers.openai.com/api/docs/guides/secure-mcp-tunnels\n'
 read -r -p "Tunnel ID: " GARMIN_TUNNEL_ID
 if [[ -z "$GARMIN_TUNNEL_ID" ]]; then
-  echo "安装和佳明认证已完成。创建 Tunnel 后运行 start_web.command。"
+  echo "安装和佳明认证已完成。创建 Tunnel 后重新运行 install_mac.command，完成隧道配置。"
   exit 0
 fi
 uv run --no-dev garmin-mcp-web setup --china --tunnel-id "$GARMIN_TUNNEL_ID" --tunnel-client "$GARMIN_PROJECT_DIR/.bin/tunnel-client"
